@@ -14,7 +14,7 @@ extern "C" {
     long compute_timezone_value() {
         long t = 0;
         _get_timezone(&t);
-        return t; // Ê¾ÀýÖµ
+        return t;
     }
 
     long& timezone() {
