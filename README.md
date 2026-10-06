@@ -2,6 +2,18 @@
 
 链接时附加此静态库，解决部分VC6的静态库，在用VC6之后的链接器链接时，缺少timezone符号无法链接的问题。
 
+## 使用方法
+
+1. 前往 [Releases 下载页面](https://github.com/aiqinxuancai/legacy_link_definitions/releases)，根据使用的链接器版本选择 VC2017、VC2022 或 VC2026 的 Win32 压缩包。
+2. 将压缩包中的 `legacy_link_definitions.lib` 解压到链接器的 `lib` 目录中，并确保该目录中也有 `legacy_stdio_definitions.lib`（本项目的压缩包不包含此文件）。
+3. 打开链接器的 INI 配置文件，添加或修改 `extra_args` 配置项：
+
+```ini
+extra_args=/DYNAMICBASE "legacy_stdio_definitions.lib" "legacy_link_definitions.lib"
+```
+
+如果已有其他 `extra_args` 参数，请合并到同一配置项中，保留原有需要的参数。保存配置后重新编译链接。
+
 ## 自动构建与发布
 
 GitHub Actions 会在分支推送、Pull Request 和手动运行时编译以下 Release 静态库：
