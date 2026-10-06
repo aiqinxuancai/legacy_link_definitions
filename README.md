@@ -4,8 +4,10 @@
 
 ## 使用方法
 
+对于VC2017、VC2022、VC2026版本的链接器使用：
+
 1. 前往 [Releases 下载页面](https://github.com/aiqinxuancai/legacy_link_definitions/releases)，根据使用的链接器版本选择 VC2017、VC2022 或 VC2026 的 Win32 压缩包。
-2. 将压缩包中的 `legacy_link_definitions.lib` 解压到链接器的 `lib` 目录中，并确保该目录中也有 `legacy_stdio_definitions.lib`（本项目的压缩包不包含此文件）。
+2. 将压缩包中的 `legacy_link_definitions.lib` 解压到链接器的 `lib` 目录中，并确保该目录中也有 `legacy_stdio_definitions.lib`（通常链接器发布时已带有）。
 3. 打开链接器的 INI 配置文件，添加或修改 `extra_args` 配置项：
 
 ```ini
