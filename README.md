@@ -25,7 +25,7 @@ GitHub Actions 会在分支推送、Pull Request 和手动运行时编译以下 
 | VC2026 | v145 | Windows Server 2025 / VS2026 | Win32 |
 
 VC2017 产物使用 VS2017 的 v141 编译器，由 VS2022 的 MSBuild 驱动构建。
-构建时通过命令行选择工具集和已安装的 Windows SDK，并关闭全程序优化（`/GL`），避免静态库依赖特定版本的 LTCG 链接器。
+构建时通过命令行选择工具集，并检测已完整安装的最新 Windows SDK，传入完整版本号（如 `10.0.26100.0`），兼容 v141 对 SDK 版本的要求。同时关闭全程序优化（`/GL`），避免静态库依赖特定版本的 LTCG 链接器。
 每个构建生成一个 ZIP，包含 `legacy_link_definitions.lib` 和本说明，可在 Actions 页面的 Artifacts 中下载。
 例如：`legacy_link_definitions-vc2022-Win32-Release.zip`，其中 Win32 表示 x86。
 

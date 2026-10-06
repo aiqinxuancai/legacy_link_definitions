@@ -65,9 +65,23 @@ jobs:
           BUILD_PLATFORM: ${{ matrix.platform }}
           BUILD_TOOLSET: ${{ matrix.compiler.toolset }}
         run: |
+          # v141 requires a full SDK version; it treats "10.0" as a literal version.
+          $kitsRoot = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots').KitsRoot10
+          $sdk = Get-ChildItem -LiteralPath (Join-Path $kitsRoot 'Include') -Directory |
+            Where-Object {
+              $_.Name -match '^10\.0\.\d+\.\d+$' -and
+              (Test-Path -LiteralPath (Join-Path $_.FullName 'um/Windows.h')) -and
+              (Test-Path -LiteralPath (Join-Path $_.FullName 'ucrt/corecrt.h')) -and
+              (Test-Path -LiteralPath (Join-Path $kitsRoot "Lib/$($_.Name)/um/x86/kernel32.lib")) -and
+              (Test-Path -LiteralPath (Join-Path $kitsRoot "Lib/$($_.Name)/ucrt/x86/libucrt.lib"))
+            } |
+            Sort-Object { [version]$_.Name } -Descending |
+            Select-Object -First 1
+          if (-not $sdk) { throw 'No complete Windows 10/11 SDK with Win32 libraries was found.' }
+          Write-Host "Using Windows SDK $($sdk.Name) with $env:BUILD_TOOLSET"
           msbuild legacy_link_definitions/legacy_link_definitions.vcxproj /m /t:Rebuild `
             /p:Configuration=Release "/p:Platform=$env:BUILD_PLATFORM" `
-            "/p:PlatformToolset=$env:BUILD_TOOLSET" /p:WindowsTargetPlatformVersion=10.0 `
+            "/p:PlatformToolset=$env:BUILD_TOOLSET" "/p:WindowsTargetPlatformVersion=$($sdk.Name)" `
             /p:WholeProgramOptimization=false `
             "/p:OutDir=$env:GITHUB_WORKSPACE/out/" "/p:IntDir=$env:RUNNER_TEMP/legacy-link-obj/"
           if ($LASTEXITCODE -ne 0) { throw "MSBuild failed: $LASTEXITCODE" }
