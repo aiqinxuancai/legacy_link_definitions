@@ -1,28 +1,36 @@
-// legacy_link_definitions.cpp : 定义静态库的函数。
-//
-
 #include "pch.h"
 #include "framework.h"
-#define _CRT_SECURE_NO_WARNINGS
 #include <time.h>
 
-#ifdef __cplusplus
 extern "C" {
-#endif
 
+#pragma warning(push)
+#pragma warning(disable : 4996)
 
-    long compute_timezone_value() {
-        long t = 0;
-        _get_timezone(&t);
-        return t;
-    }
-
-    long& timezone() {
-        static long value = compute_timezone_value();
-        return value;
-    }
-
-
-#ifdef __cplusplus
+long* __cdecl __p__timezone(void)
+{
+    _tzset();
+    return __timezone();
 }
-#endif
+
+int* __cdecl __p__daylight(void)
+{
+    _tzset();
+    return __daylight();
+}
+
+long* __cdecl __p__dstbias(void)
+{
+    _tzset();
+    return __dstbias();
+}
+
+char** __cdecl __p__tzname(void)
+{
+    _tzset();
+    return __tzname();
+}
+
+#pragma warning(pop)
+
+}

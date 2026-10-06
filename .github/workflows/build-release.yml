@@ -1,0 +1,126 @@
+name: Build and release libraries
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.compiler.name }} / ${{ matrix.platform }}
+    runs-on: ${{ matrix.compiler.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [Win32]
+        compiler:
+          - name: vc2017
+            toolset: v141
+            runner: windows-2022
+            vs-version: '[17.0,18.0)'
+          - name: vc2022
+            toolset: v143
+            runner: windows-2022
+            vs-version: '[17.0,18.0)'
+          - name: vc2026
+            toolset: v145
+            runner: windows-2025-vs2026
+            vs-version: '[18.0,19.0)'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      # Hosted runners no longer include VS2017; use its compiler in VS2022.
+      - name: Install the VC2017 toolset
+        if: matrix.compiler.toolset == 'v141'
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vsPath = & $vswhere -latest -products '*' -version '[17.0,18.0)' -property installationPath
+          if (-not $vsPath) { throw 'Visual Studio 2022 was not found.' }
+          $component = 'Microsoft.VisualStudio.Component.VC.v141.x86.x64'
+          $installed = & $vswhere -latest -products '*' -version '[17.0,18.0)' -requires $component -property installationPath
+          if (-not $installed) {
+            $setup = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/setup.exe"
+            $arguments = @('modify', '--installPath', "`"$vsPath`"", '--add', $component, '--quiet', '--norestart')
+            $process = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
+            if ($process.ExitCode -notin @(0, 3010)) {
+              throw "VC2017 toolset installation failed: $($process.ExitCode)"
+            }
+          }
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: ${{ matrix.compiler.vs-version }}
+
+      - name: Build Release library
+        env:
+          BUILD_PLATFORM: ${{ matrix.platform }}
+          BUILD_TOOLSET: ${{ matrix.compiler.toolset }}
+        run: |
+          msbuild legacy_link_definitions/legacy_link_definitions.vcxproj /m /t:Rebuild `
+            /p:Configuration=Release "/p:Platform=$env:BUILD_PLATFORM" `
+            "/p:PlatformToolset=$env:BUILD_TOOLSET" /p:WindowsTargetPlatformVersion=10.0 `
+            /p:WholeProgramOptimization=false `
+            "/p:OutDir=$env:GITHUB_WORKSPACE/out/" "/p:IntDir=$env:RUNNER_TEMP/legacy-link-obj/"
+          if ($LASTEXITCODE -ne 0) { throw "MSBuild failed: $LASTEXITCODE" }
+
+      - name: Package library
+        env:
+          PACKAGE_NAME: legacy_link_definitions-${{ matrix.compiler.name }}-${{ matrix.platform }}-Release
+        run: |
+          $library = 'out/legacy_link_definitions.lib'
+          if (-not (Test-Path -LiteralPath $library)) { throw "Missing library: $library" }
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Compress-Archive -Path $library, README.md -DestinationPath "dist/$env:PACKAGE_NAME.zip"
+
+      - name: Upload library
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy_link_definitions-${{ matrix.compiler.name }}-${{ matrix.platform }}-Release
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Download libraries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: legacy_link_definitions-*-Release
+          path: dist
+          merge-multiple: true
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          assets=(dist/*.zip)
+          if [[ ${#assets[@]} -ne 3 ]]; then
+            echo "Expected 3 library archives, found ${#assets[@]}" >&2
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --generate-notes --title "$RELEASE_TAG"
+          fi
